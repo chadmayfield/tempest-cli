@@ -1,0 +1,29 @@
+# Binary
+tempest
+tempest-cli
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Config (may contain tokens)
+config.yaml
+config.yml
