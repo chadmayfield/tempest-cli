@@ -1,12 +1,57 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	tempest "github.com/chadmayfield/tempest-go"
 	"github.com/spf13/cobra"
 )
+
+func TestFetchHistoryFromServer_QueryParams(t *testing.T) {
+	var capturedURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]tempest.Observation{})
+	}))
+	defer srv.Close()
+
+	start := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 15, 13, 0, 0, 0, time.UTC)
+
+	_, err := fetchHistoryFromServer(context.Background(), srv.URL, 1001, start, end, "metric", "1m")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Parse the captured URL and verify start/end are RFC3339, not epoch integers.
+	parsed, err := http.NewRequest("GET", capturedURL, nil)
+	if err != nil {
+		t.Fatalf("failed to parse captured URL: %v", err)
+	}
+	q := parsed.URL.Query()
+
+	startParam := q.Get("start")
+	if _, err := time.Parse(time.RFC3339, startParam); err != nil {
+		t.Errorf("start param %q is not RFC3339: %v", startParam, err)
+	}
+	if startParam != "2024-06-15T12:00:00Z" {
+		t.Errorf("start = %q, want %q", startParam, "2024-06-15T12:00:00Z")
+	}
+
+	endParam := q.Get("end")
+	if _, err := time.Parse(time.RFC3339, endParam); err != nil {
+		t.Errorf("end param %q is not RFC3339: %v", endParam, err)
+	}
+	if endParam != "2024-06-15T13:00:00Z" {
+		t.Errorf("end = %q, want %q", endParam, "2024-06-15T13:00:00Z")
+	}
+}
 
 func TestResolveResolution(t *testing.T) {
 	tests := []struct {

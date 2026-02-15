@@ -196,8 +196,8 @@ func fetchHistoryFromAPI(ctx context.Context, sc *config.StationConfig, start, e
 
 func fetchHistoryFromServer(ctx context.Context, serverURL string, stationID int, start, end time.Time, units, resolution string) ([]tempest.Observation, error) {
 	params := url.Values{}
-	params.Set("start", fmt.Sprintf("%d", start.Unix()))
-	params.Set("end", fmt.Sprintf("%d", end.Unix()))
+	params.Set("start", start.Format(time.RFC3339))
+	params.Set("end", end.Format(time.RFC3339))
 	params.Set("units", units)
 	params.Set("resolution", resolution)
 	path := fmt.Sprintf("/api/v1/stations/%d/observations?%s", stationID, params.Encode())
