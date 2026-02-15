@@ -38,5 +38,13 @@ CLI tool for querying WeatherFlow Tempest weather station data. Uses the `tempes
 - `golang.org/x/term` — terminal width detection for responsive layout
 - `log/slog` (stdlib) — structured logging
 
+## Working Style
+
+- NEVER tag/release without end-to-end testing first — build, run against live service, verify output
+- When told to verify: STOP changing code. Read source, trace paths, confirm with evidence. Only then propose a fix
+- Trace code paths step by step through actual source — don't guess what functions do
+- Verify claims through multiple independent means before presenting them as fact
+- Separate investigation from implementation — understand the full problem before proposing a fix
+
 ## Version Info
 Set via ldflags: `-X github.com/chadmayfield/tempest-cli/cmd.version=... -X ...commit=... -X ...date=...`
