@@ -23,12 +23,12 @@ func RenderHistory(theme *Theme, observations []tempest.Observation, imperial bo
 
 	columns := []table.Column{
 		{Title: "Time", Width: 16},
-		{Title: "Temp", Width: 8},
-		{Title: "Feels Like", Width: 10},
-		{Title: "Hum%", Width: 6},
+		{Title: "Temp", Width: 10},
+		{Title: "Feels Like", Width: 12},
+		{Title: "Hum%", Width: 7},
 		{Title: "Wind", Width: 14},
-		{Title: "Pressure", Width: 10},
-		{Title: "Rain", Width: 8},
+		{Title: "Pressure", Width: 12},
+		{Title: "Rain", Width: 9},
 		{Title: "UV", Width: 5},
 	}
 
@@ -73,6 +73,7 @@ func RenderHistory(theme *Theme, observations []tempest.Observation, imperial bo
 	} else {
 		s.Header = lipgloss.NewStyle().
 			Bold(true).
+			Padding(0, 1).
 			Foreground(lipgloss.AdaptiveColor{Light: "#666666", Dark: "#999999"}).
 			BorderBottom(true).
 			BorderStyle(lipgloss.NormalBorder()).

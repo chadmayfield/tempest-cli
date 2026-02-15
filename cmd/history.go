@@ -65,20 +65,13 @@ func runHistory(cmd *cobra.Command, args []string) error {
 		if resLabel == "" {
 			resLabel = resolutionLabel(resolution)
 		}
-		observations, err = fetchHistoryFromServer(ctx, serverURL, sc.StationID, start, end, units, resLabel)
+		// Always request metric from tempestd; display layer handles conversion + labeling.
+		observations, err = fetchHistoryFromServer(ctx, serverURL, sc.StationID, start, end, "metric", resLabel)
 	} else {
 		observations, err = fetchHistoryFromAPI(ctx, sc, start, end)
 	}
 	if err != nil {
 		return wrapAPIError(err)
-	}
-
-	// Apply unit conversion (only for cloud API; tempestd handles units server-side)
-	if serverURL == "" && imperial {
-		for i := range observations {
-			converted := tempest.ConvertObservation(&observations[i], tempest.Imperial)
-			observations[i] = *converted
-		}
 	}
 
 	// Apply client-side downsampling
@@ -102,8 +95,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 		termWidth = w
 	}
 
-	// When imperial, data is already converted, so pass imperial=false to avoid double conversion in display
-	output := display.RenderHistory(theme, observations, false, termWidth)
+	output := display.RenderHistory(theme, observations, imperial, termWidth)
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), output)
 
 	return nil
@@ -194,6 +186,58 @@ func fetchHistoryFromAPI(ctx context.Context, sc *config.StationConfig, start, e
 	return observations, nil
 }
 
+// serverObservation has JSON tags matching tempestd's snake_case response keys.
+// tempest.Observation has no JSON tags, so we need this intermediate type.
+type serverObservation struct {
+	Timestamp          time.Time `json:"timestamp"`
+	StationID          int       `json:"station_id"`
+	WindLull           float64   `json:"wind_lull"`
+	WindAvg            float64   `json:"wind_avg"`
+	WindGust           float64   `json:"wind_gust"`
+	WindDirection      float64   `json:"wind_direction"`
+	StationPressure    float64   `json:"station_pressure"`
+	AirTemperature     float64   `json:"air_temperature"`
+	RelativeHumidity   float64   `json:"relative_humidity"`
+	UVIndex            float64   `json:"uv_index"`
+	SolarRadiation     float64   `json:"solar_radiation"`
+	RainAccumulation   float64   `json:"rain_accumulation"`
+	PrecipitationType  int       `json:"precipitation_type"`
+	LightningAvgDist   float64   `json:"lightning_avg_distance"`
+	LightningCount     int       `json:"lightning_strike_count"`
+	Battery            float64   `json:"battery"`
+	FeelsLike          float64   `json:"feels_like"`
+	DewPoint           float64   `json:"dew_point"`
+}
+
+// observationsEnvelope matches the envelope response from tempestd's
+// GET /api/v1/stations/{id}/observations endpoint.
+type observationsEnvelope struct {
+	Observations []serverObservation `json:"observations"`
+}
+
+func serverObsToObservation(s serverObservation) tempest.Observation {
+	return tempest.Observation{
+		Timestamp:         s.Timestamp,
+		StationID:         s.StationID,
+		WindLull:          s.WindLull,
+		WindAvg:           s.WindAvg,
+		WindGust:          s.WindGust,
+		WindDirection:     s.WindDirection,
+		StationPressure:   s.StationPressure,
+		AirTemperature:    s.AirTemperature,
+		RelativeHumidity:  s.RelativeHumidity,
+		UVIndex:           s.UVIndex,
+		SolarRadiation:    s.SolarRadiation,
+		RainAccumulation:  s.RainAccumulation,
+		PrecipitationType: s.PrecipitationType,
+		LightningAvgDist:  s.LightningAvgDist,
+		LightningCount:    s.LightningCount,
+		Battery:           s.Battery,
+		FeelsLike:         s.FeelsLike,
+		DewPoint:          s.DewPoint,
+	}
+}
+
 func fetchHistoryFromServer(ctx context.Context, serverURL string, stationID int, start, end time.Time, units, resolution string) ([]tempest.Observation, error) {
 	params := url.Values{}
 	params.Set("start", start.Format(time.RFC3339))
@@ -201,11 +245,15 @@ func fetchHistoryFromServer(ctx context.Context, serverURL string, stationID int
 	params.Set("units", units)
 	params.Set("resolution", resolution)
 	path := fmt.Sprintf("/api/v1/stations/%d/observations?%s", stationID, params.Encode())
-	result, err := fetchFromTempestd[[]tempest.Observation](ctx, serverURL, path)
+	result, err := fetchFromTempestd[observationsEnvelope](ctx, serverURL, path)
 	if err != nil {
 		return nil, err
 	}
-	return *result, nil
+	obs := make([]tempest.Observation, len(result.Observations))
+	for i, s := range result.Observations {
+		obs[i] = serverObsToObservation(s)
+	}
+	return obs, nil
 }
 
 func parseHistoryDates(cmd *cobra.Command) (time.Time, time.Time, error) {

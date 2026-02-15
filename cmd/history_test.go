@@ -17,7 +17,7 @@ func TestFetchHistoryFromServer_QueryParams(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]tempest.Observation{})
+		_ = json.NewEncoder(w).Encode(map[string]any{"observations": []any{}})
 	}))
 	defer srv.Close()
 
@@ -50,6 +50,80 @@ func TestFetchHistoryFromServer_QueryParams(t *testing.T) {
 	}
 	if endParam != "2024-06-15T13:00:00Z" {
 		t.Errorf("end = %q, want %q", endParam, "2024-06-15T13:00:00Z")
+	}
+}
+
+func TestFetchHistoryFromServer_Deserialization(t *testing.T) {
+	// Return a response matching the exact shape from tempestd's API.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"station_id": 1001,
+			"start": "2025-12-25T00:00:00Z",
+			"end": "2025-12-25T00:06:00Z",
+			"resolution": "1m",
+			"units": "imperial",
+			"total": 1,
+			"limit": 1000,
+			"offset": 0,
+			"observations": [
+				{
+					"air_temperature": 55.22,
+					"battery": 2.51,
+					"dew_point": 42.85,
+					"feels_like": 55.22,
+					"lightning_avg_distance": 0,
+					"lightning_strike_count": 0,
+					"precipitation_type": 1,
+					"rain_accumulation": 0.003,
+					"relative_humidity": 63,
+					"solar_radiation": 1,
+					"station_id": 1001,
+					"station_pressure": 24.85,
+					"timestamp": "2025-12-25T00:00:00Z",
+					"uv_index": 0.01,
+					"wind_avg": 4.25,
+					"wind_direction": 182,
+					"wind_gust": 8.95,
+					"wind_lull": 0.22
+				}
+			]
+		}`))
+	}))
+	defer srv.Close()
+
+	start := time.Date(2025, 12, 25, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 12, 25, 0, 6, 0, 0, time.UTC)
+
+	obs, err := fetchHistoryFromServer(context.Background(), srv.URL, 1001, start, end, "imperial", "1m")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obs) != 1 {
+		t.Fatalf("got %d observations, want 1", len(obs))
+	}
+
+	o := obs[0]
+	if o.AirTemperature != 55.22 {
+		t.Errorf("AirTemperature = %f, want 55.22", o.AirTemperature)
+	}
+	if o.StationID != 1001 {
+		t.Errorf("StationID = %d, want 1001", o.StationID)
+	}
+	if o.WindAvg != 4.25 {
+		t.Errorf("WindAvg = %f, want 4.25", o.WindAvg)
+	}
+	if o.Battery != 2.51 {
+		t.Errorf("Battery = %f, want 2.51", o.Battery)
+	}
+	if o.WindDirection != 182 {
+		t.Errorf("WindDirection = %f, want 182", o.WindDirection)
+	}
+	if o.RelativeHumidity != 63 {
+		t.Errorf("RelativeHumidity = %f, want 63", o.RelativeHumidity)
+	}
+	if o.Timestamp.IsZero() {
+		t.Error("Timestamp should not be zero")
 	}
 }
 
